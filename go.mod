@@ -12,5 +12,6 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/radovskyb/watcher v1.0.6
+	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	github.com/unrolled/render v1.4.1
 )

@@ -12,6 +12,7 @@ The camera stream can be viewed in a HomeKit app. For example my [Home+](https:/
 - Works with any HomeKit app (ex. [Home+](https://hochgatterer.me/home))
 - [Multistream Support](#multistream)
 - [Persistent Snapshots](#persistent-snapshots)
+- [3D Printer Control Integration](#printer-control)
 - [Built-in Web Interface](#web-interface)
 - Runs on multiple platforms (Raspberry Pi OS, macOS)
 
@@ -179,6 +180,22 @@ as you can see from the following screenshots.
 Taking snapshots in automations is also supported.
 
 <img alt="Automation" src="_img/homeplus-automation.jpeg?raw=true" width="280" />
+
+## Printer Control
+
+`hkcam` can now control 3D printers via serial connection, adding HomeKit services for:
+- **Print pause/resume** control
+- **Bed and nozzle temperature** monitoring and control
+- **Part cooling fan** control
+
+This allows you to monitor and control your 3D printer from any HomeKit app.
+
+See [PRINTER_CONTROL.md](PRINTER_CONTROL.md) for complete documentation.
+
+Quick example:
+```bash
+hkcam --printer_port=/dev/ttyUSB0 --printer_baudrate=115200
+```
 
 ## Web Interface
 

@@ -76,6 +76,12 @@ func main() {
 	var verbose *bool = flag.Bool("verbose", false, "Verbose logging")
 	var pin *string = flag.String("pin", "00102003", "PIN for HomeKit pairing")
 	var port *string = flag.String("port", "", "Port on which transport is reachable")
+	
+	// Printer control flags
+	var printerPort *string = flag.String("printer_port", "", "Serial port for 3D printer (e.g., /dev/ttyUSB0)")
+	var printerBaudrate *int = flag.Int("printer_baudrate", 115200, "Serial baudrate for printer")
+	var maxBedTemp *float64 = flag.Float64("max_bed_temp", 110, "Maximum bed temperature in Celsius")
+	var maxNozzleTemp *float64 = flag.Float64("max_nozzle_temp", 260, "Maximum nozzle temperature in Celsius")
 
 	flag.Parse()
 
@@ -112,6 +118,25 @@ func main() {
 	cam.Control.AddC(cc.GetAsset.C)
 	cam.Control.AddC(cc.DeleteAssets.C)
 	cam.Control.AddC(cc.TakeSnapshot.C)
+	
+	// Add printer control services if printer port is specified
+	var pc *hkcam.PrinterControl
+	var printerController *hkcam.PrinterController
+	if *printerPort != "" {
+		log.Info.Printf("Initializing printer control on %s", *printerPort)
+		printerController = hkcam.NewPrinterController(*printerPort, *printerBaudrate, 2*time.Second)
+		if err := printerController.Connect(); err != nil {
+			log.Info.Printf("Warning: Failed to connect to printer: %v", err)
+			log.Info.Println("Continuing without printer control features")
+		} else {
+			pc = hkcam.NewPrinterControl(printerController, *maxBedTemp, *maxNozzleTemp)
+			cam.A.AddS(pc.PrintSwitch.S)
+			cam.A.AddS(pc.BedThermostat.S)
+			cam.A.AddS(pc.NozzleThermostat.S)
+			cam.A.AddS(pc.Fan.S)
+			log.Info.Println("Printer control services added to accessory")
+		}
+	}
 
 	store := hap.NewFsStore(*dataDir)
 	s, err := hap.NewServer(store, cam.A)
@@ -236,6 +261,11 @@ func main() {
 	go func() {
 		<-c
 		signal.Stop(c) // stop delivering signals
+		// Disconnect printer if connected
+		if printerController != nil {
+			log.Info.Println("Disconnecting printer...")
+			printerController.Disconnect()
+		}
 		cancel()
 	}()
 
