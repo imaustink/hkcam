@@ -76,12 +76,17 @@ func main() {
 	var verbose *bool = flag.Bool("verbose", false, "Verbose logging")
 	var pin *string = flag.String("pin", "00102003", "PIN for HomeKit pairing")
 	var port *string = flag.String("port", "", "Port on which transport is reachable")
-	
+
 	// Printer control flags
 	var printerPort *string = flag.String("printer_port", "", "Serial port for 3D printer (e.g., /dev/ttyUSB0)")
 	var printerBaudrate *int = flag.Int("printer_baudrate", 115200, "Serial baudrate for printer")
 	var maxBedTemp *float64 = flag.Float64("max_bed_temp", 110, "Maximum bed temperature in Celsius")
 	var maxNozzleTemp *float64 = flag.Float64("max_nozzle_temp", 260, "Maximum nozzle temperature in Celsius")
+
+	// LED light control flags
+	var enableLights *bool = flag.Bool("enable_lights", false, "Enable WS2812b LED control")
+	var lightGpioPin *int = flag.Int("light_gpio_pin", 18, "GPIO pin for WS2812b LED control (default: 18)")
+	var ledCount *int = flag.Int("led_count", 30, "Number of LEDs in the strip")
 
 	flag.Parse()
 
@@ -118,7 +123,7 @@ func main() {
 	cam.Control.AddC(cc.GetAsset.C)
 	cam.Control.AddC(cc.DeleteAssets.C)
 	cam.Control.AddC(cc.TakeSnapshot.C)
-	
+
 	// Add printer control services if printer port is specified
 	var pc *hkcam.PrinterControl
 	var printerController *hkcam.PrinterController
@@ -135,6 +140,22 @@ func main() {
 			cam.A.AddS(pc.NozzleThermostat.S)
 			cam.A.AddS(pc.Fan.S)
 			log.Info.Println("Printer control services added to accessory")
+		}
+	}
+
+	// Add LED light control if enabled
+	var lc *hkcam.LightControl
+	var lightController *hkcam.LightController
+	if *enableLights {
+		log.Info.Printf("Initializing LED light control on GPIO %d with %d LEDs", *lightGpioPin, *ledCount)
+		lightController = hkcam.NewLightController(*lightGpioPin, *ledCount)
+		if err := lightController.Connect(); err != nil {
+			log.Info.Printf("Warning: Failed to connect to LED controller: %v", err)
+			log.Info.Println("Continuing without LED light control features")
+		} else {
+			lc = hkcam.NewLightControl(lightController)
+			cam.A.AddS(lc.Lightbulb.S)
+			log.Info.Println("LED light control service added to accessory")
 		}
 	}
 
@@ -265,6 +286,11 @@ func main() {
 		if printerController != nil {
 			log.Info.Println("Disconnecting printer...")
 			printerController.Disconnect()
+		}
+		// Disconnect LED controller if connected
+		if lightController != nil {
+			log.Info.Println("Disconnecting LED controller...")
+			lightController.Disconnect()
 		}
 		cancel()
 	}()
