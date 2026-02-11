@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/brutella/hkcam/app"
+	"github.com/brutella/hkcam/printer"
 	"github.com/go-chi/chi"
 
 	"net/http"
@@ -14,7 +15,8 @@ const (
 )
 
 type Api struct {
-	App *app.App
+	App               *app.App
+	PrinterController *printer.Controller
 }
 
 func (a *Api) Router() http.Handler {
@@ -22,8 +24,9 @@ func (a *Api) Router() http.Handler {
 	r.Get("/system/heartbeat", a.SystemHeartbeat)
 	r.Get("/system/info", a.SystemInfo)
 	r.Post("/system/restart", a.SystemRestart)
-    r.Get("/snapshots/recent", a.RecentSnapshot)
+	r.Get("/snapshots/recent", a.RecentSnapshot)
 	r.Get("/snapshots/new", a.NewSnapshot)
+	r.Get("/printer/status", a.PrinterStatus)
 
 	return r
 }

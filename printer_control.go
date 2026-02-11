@@ -17,6 +17,12 @@ func NewPrinterController(port string, baudrate int, timeout time.Duration) *Pri
 	return printer.NewController(port, baudrate, timeout)
 }
 
+// FindBestPrinterPort finds the best available printer serial port.
+// If preferredPort exists, it uses that. Otherwise, it attempts auto-detection.
+func FindBestPrinterPort(preferredPort string) (string, error) {
+	return printer.FindBestSerialPort(preferredPort)
+}
+
 // PrinterControl manages printer-related HomeKit services.
 type PrinterControl struct {
 	PrintSwitch      *service.Switch

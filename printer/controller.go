@@ -162,24 +162,72 @@ func (c *Controller) monitorLoop() {
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	
+	failureCount := 0
+	const maxFailures = 3
 
 	for {
 		select {
 		case <-c.stopChan:
 			return
 		case <-ticker.C:
-			c.updateTemperatures()
-			c.checkPrintStatus()
+			// Try to update temperatures and check status
+			tempErr := c.updateTemperatures()
+			statusErr := c.checkPrintStatus()
+			
+			// Track failures and attempt reconnection if needed
+			if tempErr != nil || statusErr != nil {
+				failureCount++
+				if failureCount >= maxFailures {
+					log.Info.Printf("Multiple failures detected (%d), attempting to reconnect...", failureCount)
+					c.attemptReconnect()
+					failureCount = 0 // Reset counter after reconnect attempt
+				}
+			} else {
+				failureCount = 0 // Reset on success
+			}
 		}
 	}
 }
 
+// attemptReconnect tries to reconnect to the printer by finding the serial port again.
+func (c *Controller) attemptReconnect() {
+	log.Info.Println("Attempting to reconnect to printer...")
+	
+	// Close existing connection
+	if c.serial != nil {
+		c.serial.Close()
+		c.serial = nil
+		c.connected = false
+	}
+	
+	// Try to find the port (it may have moved to a different ttyUSB#)
+	port, err := FindBestSerialPort(c.port)
+	if err != nil {
+		log.Info.Printf("Failed to find serial port: %v", err)
+		return
+	}
+	
+	// Update port if it changed
+	if port != c.port {
+		log.Info.Printf("Serial port changed from %s to %s", c.port, port)
+		c.port = port
+	}
+	
+	// Attempt to reconnect
+	if err := c.Connect(); err != nil {
+		log.Info.Printf("Failed to reconnect: %v", err)
+	} else {
+		log.Info.Println("Successfully reconnected to printer")
+	}
+}
+
 // checkPrintStatus checks if the printer is currently printing.
-func (c *Controller) checkPrintStatus() {
+func (c *Controller) checkPrintStatus() error {
 	response, err := c.sendCommand("M27", true) // Get SD print status
 	if err != nil {
 		log.Info.Printf("Error checking print status: %v", err)
-		return
+		return err
 	}
 
 	c.stateLock.Lock()
@@ -199,10 +247,12 @@ func (c *Controller) checkPrintStatus() {
 	if wasActive != isActive && c.onPrintStatusUpdate != nil {
 		c.onPrintStatusUpdate()
 	}
+	
+	return nil
 }
 
 // updateTemperatures queries and updates temperature readings.
-func (c *Controller) updateTemperatures() {
+func (c *Controller) updateTemperatures() error {
 	// Retry up to 3 times if printer is busy
 	var response string
 	var err error
@@ -211,7 +261,7 @@ func (c *Controller) updateTemperatures() {
 		response, err = c.sendCommand("M105", true) // Get temperature
 		if err != nil {
 			log.Info.Printf("Error getting temperature: %v", err)
-			return
+			return err
 		}
 
 		if strings.Contains(strings.ToLower(response), "busy") {
@@ -260,6 +310,9 @@ func (c *Controller) updateTemperatures() {
 	} else {
 		log.Info.Printf("Failed to parse temperature from response: %s", response)
 	}
+	
+	
+	return nil
 }
 
 // SetBedTemperature sets the bed target temperature.

@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/brutella/hap/log"
 	"github.com/brutella/hap/rtp"
@@ -41,6 +42,7 @@ type ffmpeg struct {
 	mutex    *sync.Mutex
 	streams  map[StreamID]*stream
 	snapshot *Snapshot
+	stopChan chan struct{}
 }
 
 // New returns a new ffmpeg handle to start and stop video streams and to make snapshots.
@@ -51,11 +53,49 @@ func New(cfg Config) *ffmpeg {
 		loop = NewLoopback(cfg.InputDevice, cfg.InputFilename, cfg.LoopbackFilename)
 	}
 
-	return &ffmpeg{
-		cfg:     cfg,
-		loop:    loop,
-		mutex:   &sync.Mutex{},
-		streams: make(map[StreamID]*stream, 0),
+	ff := &ffmpeg{
+		cfg:      cfg,
+		loop:     loop,
+		mutex:    &sync.Mutex{},
+		streams:  make(map[StreamID]*stream, 0),
+		stopChan: make(chan struct{}),
+	}
+	
+	// Start background cleanup for stale streams
+	go ff.cleanupStaleStreams()
+	
+	return ff
+}
+
+// cleanupStaleStreams periodically checks for and removes stale streams.
+func (f *ffmpeg) cleanupStaleStreams() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	
+	const staleTimeout = 2 * time.Minute
+	
+	for {
+		select {
+		case <-f.stopChan:
+			return
+		case <-ticker.C:
+			f.mutex.Lock()
+			
+			for id, s := range f.streams {
+				if s.isStale(staleTimeout) {
+					log.Info.Printf("Cleaning up stale stream %s (inactive for > %v)", id, staleTimeout)
+					s.stop()
+					delete(f.streams, id)
+				}
+			}
+			
+			// Stop loopback if no active streams remain
+			if len(f.streams) == 0 && f.loop != nil {
+				f.loop.Stop()
+			}
+			
+			f.mutex.Unlock()
+		}
 	}
 }
 
@@ -64,7 +104,17 @@ func (f *ffmpeg) PrepareNewStream(req rtp.SetupEndpoints, resp rtp.SetupEndpoint
 	defer f.mutex.Unlock()
 
 	id := StreamID(req.SessionId)
-	s := &stream{f.videoInputDevice(), f.videoInputFilename(), f.cfg.H264Decoder, f.cfg.H264Encoder, f.cfg.MinVideoBitrate, req, resp, nil}
+	s := &stream{
+		inputDevice:     f.videoInputDevice(),
+		inputFilename:   f.videoInputFilename(),
+		h264Decoder:     f.cfg.H264Decoder,
+		h264Encoder:     f.cfg.H264Encoder,
+		minVideoBitrate: f.cfg.MinVideoBitrate,
+		req:             req,
+		resp:            resp,
+		cmd:             nil,
+		lastActive:      time.Now(),
+	}
 	f.streams[id] = s
 	return id
 }
@@ -87,6 +137,9 @@ func (f *ffmpeg) Start(id StreamID, video rtp.VideoParameters, audio rtp.AudioPa
 	}
 
 	f.startLoopback()
+	
+	// Update activity on start
+	s.updateActivity()
 
 	return s.start(video, audio)
 }
@@ -124,6 +177,7 @@ func (f *ffmpeg) Suspend(id StreamID) {
 	if s, err := f.getStream(id); err != nil {
 		log.Info.Println("suspend:", err)
 	} else {
+		s.updateActivity()
 		s.suspend()
 	}
 }
@@ -135,6 +189,7 @@ func (f *ffmpeg) Resume(id StreamID) {
 	if s, err := f.getStream(id); err != nil {
 		log.Info.Println("resume:", err)
 	} else {
+		s.updateActivity()
 		s.resume()
 	}
 }
@@ -148,6 +203,8 @@ func (f *ffmpeg) Reconfigure(id StreamID, video rtp.VideoParameters, audio rtp.A
 		log.Info.Println("reconfigure:", err)
 		return err
 	}
+	
+	s.updateActivity()
 
 	return s.reconfigure(video, audio)
 }

@@ -2,11 +2,13 @@ package ffmpeg
 
 import (
 	"fmt"
-	"github.com/brutella/hap/log"
-	"github.com/brutella/hap/rtp"
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
+
+	"github.com/brutella/hap/log"
+	"github.com/brutella/hap/rtp"
 )
 
 type stream struct {
@@ -19,11 +21,20 @@ type stream struct {
 	req  rtp.SetupEndpoints
 	resp rtp.SetupEndpointsResponse
 
-	cmd *exec.Cmd
+	cmd        *exec.Cmd
+	lastActive time.Time // Track last activity
 }
 
 func (s *stream) isActive() bool {
 	return s.cmd != nil
+}
+
+func (s *stream) updateActivity() {
+	s.lastActive = time.Now()
+}
+
+func (s *stream) isStale(timeout time.Duration) bool {
+	return s.cmd != nil && time.Since(s.lastActive) > timeout
 }
 
 func (s *stream) stop() {
@@ -38,6 +49,9 @@ func (s *stream) stop() {
 
 func (s *stream) start(video rtp.VideoParameters, audio rtp.AudioParameters) error {
 	log.Debug.Println("start stream")
+
+	// Update activity timestamp
+	s.updateActivity()
 
 	// -vsync 2: Fixes "Frame rate very high for a muxer not efficiently supporting it."
 	// -framerate before -i specifies the framerate for the input, after -i sets it for the output https://stackoverflow.com/questions/38498599/webcam-with-ffmpeg-on-mac-selected-framerate-29-970030-is-not-supported-by-th#38549528

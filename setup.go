@@ -39,7 +39,7 @@ func first(ips []net.IP, filter func(net.IP) bool) net.IP {
 }
 
 func setupStreamManagement(m *service.CameraRTPStreamManagement, ff ffmpeg.FFMPEG, multiStream bool) {
-	setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{rtp.StreamingStatusAvailable})
+	setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{Status: rtp.StreamingStatusAvailable})
 	setTLV8Payload(m.SupportedRTPConfiguration.Bytes, rtp.NewConfiguration(rtp.CryptoSuite_AES_CM_128_HMAC_SHA1_80))
 	setTLV8Payload(m.SupportedVideoStreamConfiguration.Bytes, rtp.DefaultVideoStreamConfiguration())
 	setTLV8Payload(m.SupportedAudioStreamConfiguration.Bytes, rtp.DefaultAudioStreamConfiguration())
@@ -59,7 +59,7 @@ func setupStreamManagement(m *service.CameraRTPStreamManagement, ff ffmpeg.FFMPE
 				// If only one video stream is supported, set the status to busy.
 				// This way HomeKit knows that nobody is allowed to connect anymore.
 				// If multiple streams are supported, the status is always available.
-				setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{rtp.StreamingStatusBusy})
+				setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{Status: rtp.StreamingStatusBusy})
 			}
 		case rtp.SessionControlCommandTypeSuspend:
 			ff.Suspend(id)
@@ -69,7 +69,7 @@ func setupStreamManagement(m *service.CameraRTPStreamManagement, ff ffmpeg.FFMPE
 			ff.Reconfigure(id, cfg.Video, cfg.Audio)
 		case rtp.SessionControlCommandTypeEnd:
 			ff.Stop(id)
-			setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{rtp.StreamingStatusAvailable})
+			setTLV8Payload(m.StreamingStatus.Bytes, rtp.StreamingStatus{Status: rtp.StreamingStatusAvailable})
 		default:
 			log.Debug.Printf("Unknown command type %d", cfg.Command.Type)
 		}

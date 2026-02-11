@@ -22,7 +22,8 @@ func snapshot(width, height uint, inputDevice, inputFilename string) (*Snapshot,
 	filePath := path.Join(os.TempDir(), fileName)
 
 	// height "-2" keeps the aspect ratio
-	arg := fmt.Sprintf("-f %s -framerate 30 -i %s -vf scale=%d:-2 -frames:v 1 %s", inputDevice, inputFilename, width, filePath)
+	// Don't specify framerate - use device's native rate
+	arg := fmt.Sprintf("-f %s -i %s -vf scale=%d:-2 -frames:v 1 %s", inputDevice, inputFilename, width, filePath)
 	args := strings.Split(arg, " ")
 
 	cmd := exec.Command("ffmpeg", args[:]...)

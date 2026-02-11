@@ -9,6 +9,29 @@
             <div id="date" class="py-2"></div>
         </div>
     </div>
+    
+    <!-- Printer Status Display -->
+    <div class="row mt-3" id="printerStatus" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Printer Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Bed Temp:</strong> <span id="bedTempCurrent">--</span>°C / <span id="bedTempTarget">--</span>°C</p>
+                            <p><strong>Nozzle Temp:</strong> <span id="nozzleTempCurrent">--</span>°C / <span id="nozzleTempTarget">--</span>°C</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Status:</strong> <span id="printStatus">--</span></p>
+                            <p><strong>Fan:</strong> <span id="fanStatus">--</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 <script type="text/javascript">
     let img = document.getElementById('snapshot')
@@ -34,6 +57,41 @@
         updateSnapshotDate(img.dataset.date)
     }, 1000)
 
+    // Poll printer status every 3 seconds
+    setInterval(function() {
+        updatePrinterStatus()
+    }, 3000)
+    
+    // Initial printer status check
+    updatePrinterStatus()
+    
+    function updatePrinterStatus() {
+        var xhttp = new APIRequest("GET", `/api/printer/status`);
+        xhttp.onreadystatechange = function() {
+            if (xhttp.readyState == xhttp.DONE && xhttp.status == 200) {
+                var resp = JSON.parse(xhttp.responseText)
+                if (resp.data && resp.data.connected) {
+                    document.getElementById('printerStatus').style.display = 'block';
+                    
+                    document.getElementById('bedTempCurrent').innerText = resp.data.bed_temp_current.toFixed(1);
+                    document.getElementById('bedTempTarget').innerText = resp.data.bed_temp_target.toFixed(1);
+                    document.getElementById('nozzleTempCurrent').innerText = resp.data.nozzle_temp_current.toFixed(1);
+                    document.getElementById('nozzleTempTarget').innerText = resp.data.nozzle_temp_target.toFixed(1);
+                    
+                    var status = 'Idle';
+                    if (resp.data.active) {
+                        status = 'Printing';
+                    } else if (resp.data.is_paused) {
+                        status = 'Paused';
+                    }
+                    document.getElementById('printStatus').innerText = status;
+                    
+                    document.getElementById('fanStatus').innerText = resp.data.fan_on ? 'On' : 'Off';
+                }
+            }
+        };
+        xhttp.send(null);
+    }
     
     function loadNewSnapshot() {
         getNewSnapshot(function(image) {

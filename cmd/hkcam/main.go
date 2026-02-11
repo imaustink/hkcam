@@ -102,7 +102,7 @@ func main() {
 
 	log.Info.Printf("version %s (built at %s)\n", Version, Date)
 
-	switchInfo := accessory.Info{Name: "Camera", Firmware: Version, Manufacturer: "Matthias Hochgatterer"}
+	switchInfo := accessory.Info{Name: "Print Camera", Firmware: Version, Manufacturer: "Raspberry Pi Foundation"}
 	cam := accessory.NewCamera(switchInfo)
 
 	cfg := ffmpeg.Config{
@@ -129,17 +129,26 @@ func main() {
 	var printerController *hkcam.PrinterController
 	if *printerPort != "" {
 		log.Info.Printf("Initializing printer control on %s", *printerPort)
-		printerController = hkcam.NewPrinterController(*printerPort, *printerBaudrate, 2*time.Second)
-		if err := printerController.Connect(); err != nil {
-			log.Info.Printf("Warning: Failed to connect to printer: %v", err)
+
+		// Auto-detect or use specified port
+		actualPort, err := hkcam.FindBestPrinterPort(*printerPort)
+		if err != nil {
+			log.Info.Printf("Warning: Failed to find printer port: %v", err)
 			log.Info.Println("Continuing without printer control features")
 		} else {
-			pc = hkcam.NewPrinterControl(printerController, *maxBedTemp, *maxNozzleTemp)
-			cam.A.AddS(pc.PrintSwitch.S)
-			cam.A.AddS(pc.BedThermostat.S)
-			cam.A.AddS(pc.NozzleThermostat.S)
-			cam.A.AddS(pc.Fan.S)
-			log.Info.Println("Printer control services added to accessory")
+			log.Info.Printf("Using printer port: %s", actualPort)
+			printerController = hkcam.NewPrinterController(actualPort, *printerBaudrate, 2*time.Second)
+			if err := printerController.Connect(); err != nil {
+				log.Info.Printf("Warning: Failed to connect to printer: %v", err)
+				log.Info.Println("Continuing without printer control features")
+			} else {
+				pc = hkcam.NewPrinterControl(printerController, *maxBedTemp, *maxNozzleTemp)
+				cam.A.AddS(pc.PrintSwitch.S)
+				cam.A.AddS(pc.BedThermostat.S)
+				cam.A.AddS(pc.NozzleThermostat.S)
+				cam.A.AddS(pc.Fan.S)
+				log.Info.Println("Printer control services added to accessory")
+			}
 		}
 	}
 
@@ -239,7 +248,8 @@ func main() {
 		FFMPEG:    ffmpeg,
 	}
 	api := &api.Api{
-		App: appl,
+		App:               appl,
+		PrinterController: printerController,
 	}
 
 	// files are served via fs.go
