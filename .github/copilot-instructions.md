@@ -65,18 +65,43 @@ go build -o /tmp/hkcam-new -ldflags "-X main.Version=dev -X main.Date=$(date +%F
 
 ```bash
 # Stop service
-sudo sv stop hkcam
+sudo systemctl stop hkcam
 
 # Replace binary
 sudo cp /tmp/hkcam-new /opt/hkcam/hkcam
 sudo chmod +x /opt/hkcam/hkcam
 
 # Restart service
-sudo sv restart hkcam
+sudo systemctl start hkcam
 
 # Monitor logs
 sudo journalctl -u hkcam -f
 ```
+
+### Resetting HomeKit Pairing
+
+To reset the HomeKit pairing and re-pair the device (useful when pairing issues occur or switching Home hubs):
+
+```bash
+# Stop service
+sudo systemctl stop hkcam
+
+# Remove pairing database
+sudo rm -rf /opt/hkcam/db/*
+
+# Restart service
+sudo systemctl start hkcam
+
+# Check status
+sudo systemctl status hkcam
+```
+
+After reset:
+- Device will appear as a new unpaired accessory in HomeKit
+- Use PIN `00102003` (or configured PIN) to pair
+- All HomeKit settings and automations will need to be recreated
+
+**Database Location:** `/opt/hkcam/db/` (controlled by `--data_dir` flag, default is `db` relative to working directory)
 
 ### Debugging on Device
 
