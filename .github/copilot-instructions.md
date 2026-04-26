@@ -55,10 +55,6 @@ rsync -avz --exclude='.git' --exclude='build' --exclude='db' . printcam:/tmp/hkc
 ssh printcam
 cd /tmp/hkcam-update
 make build
-
-# Or direct build
-go run github.com/mjibson/esc -o cmd/hkcam/fs.go -ignore ".*\.go" html static
-go build -o /tmp/hkcam-new -ldflags "-X main.Version=dev -X main.Date=$(date +%FT%TZ%z)" cmd/hkcam/main.go cmd/hkcam/fs.go
 ```
 
 ### Deployment

@@ -2,9 +2,8 @@ package printer
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/brutella/hap/log"
 )
@@ -34,8 +33,8 @@ func DetectSerialPort() (string, error) {
 func FindBestSerialPort(preferredPort string) (string, error) {
 	// First try the preferred port if specified
 	if preferredPort != "" {
-		// Check if device exists
-		if _, err := ioutil.ReadFile(preferredPort); err == nil || strings.Contains(err.Error(), "permission denied") {
+		// Check if device file exists (don't try to read it)
+		if _, err := os.Stat(preferredPort); err == nil {
 			log.Info.Printf("Using specified serial port: %s", preferredPort)
 			return preferredPort, nil
 		}
